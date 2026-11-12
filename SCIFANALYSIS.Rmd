@@ -1,0 +1,333 @@
+---
+title: "MELANOMA data analysis"
+author: "Bethany"
+date: "2026-11-05"
+output:
+  pdf_document: default
+  html_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+
+```{r}
+Demand <- read.csv("~/Downloads/SCIF DATA(Articles, Incidence, Population) (1).csv")
+```
+
+Modelling the data using negative binomial regression:
+
+```{r}
+library(tidyverse)
+library(MASS)
+
+Demand_Model <- glm.nb(
+ Articles ~ Country + Year +
+    offset(log(Population)),
+  data = Demand
+)
+
+summary(Demand_Model)
+```
+
+The Australian regression coefficient is 0.671780. This represents the difference in log(publication rate) between AU and US, after adjusting for population size and year. The model is using a log link.
+
+```{r}
+exp(0.671780)
+```
+
+This means Australia's publication rate is 1.96 times that of the US
+
+Null Hypothesis: There is no difference in publications per capita between AU and US
+Alternate Hypothesis: Therer is a significant difference
+
+P-value for CountryAustralia is  <2e-16 *** which is below 0.05. This means the difference is significant. 
+
+CAUTION: This data is only based on the last 7 years. 
+
+```{r, echo=FALSE}
+
+# Plotting the number of publications in AU and US
+
+library(ggplot2)
+
+ggplot(Demand, aes(x = Year, y = Articles,
+                   colour = Country,
+                   group = Country)) +
+  geom_line(linewidth = 1.2) +
+  geom_point(size = 3) +
+  labs(
+    title = "Melanoma Mouse-Model Publications",
+    x = "Year",
+    y = "Number of publications",
+    colour = "Country"
+  ) +
+  theme_classic()
+
+# Calculating the ratio between the two countries
+rate <-Demand$Articles[8:14]/Demand$Articles[1:7]
+mean(rate)
+```
+
+```{r, echo=FALSE}
+library(MASS)
+library(ggplot2)
+
+# Using earlier negative binomial model to plot publication rate estimates per capita
+
+library(MASS)
+library(ggplot2)
+
+# Creating prediction data
+prediction_data <- merge(
+  expand.grid(
+    Country = c("America", "Australia"),
+    Year = 2019:2025
+  ),
+  transform(
+    Demand[c("Country", "Year", "Population")],
+    Country = as.character(Country)
+  ),
+  by = c("Country", "Year")
+)
+
+# Predicting publication rates
+pred <- predict(Demand_Model, prediction_data, type = "link", se.fit = TRUE)
+
+# Calculating rates and 95% confidence intervals per million people
+prediction_data <- transform(
+  prediction_data,
+  Rate  = exp(pred$fit) * 1e6 / Population,
+  Lower = exp(pred$fit - 1.96 * pred$se.fit) * 1000000 / Population,
+  Upper = exp(pred$fit + 1.96 * pred$se.fit) * 1000000 / Population
+)
+
+# Plotting the data
+ggplot(prediction_data, aes(x = Year, y = Rate, colour = Country)) +
+  geom_ribbon(
+    aes(ymin = Lower, ymax = Upper, fill = Country),
+    alpha = 0.2,
+    colour = NA,
+    show.legend = FALSE
+  ) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 3) +
+  scale_x_continuous(breaks = 2019:2025) +
+  scale_y_continuous(limits = c(0, NA)) +
+  labs(
+    title = "Publication Rate Estimates",
+    x = "Year",
+    y = "Estimated publications (per 1,000,000)",
+    colour = "Country"
+  ) +
+  theme_classic()
+```
+
+```{r, include=FALSE}
+Demand_Incidence <- read.csv("~/Downloads/SCIF DATA(2019-2023).csv")
+library(MASS)
+Demand_Incidence_Model <- glm.nb(
+  Articles ~ Country + Year + Incidence +
+    offset(log(Population)),
+  data = Demand_Incidence
+)
+
+summary(Demand_Incidence_Model)
+exp(1.483511)
+
+# When incidence is included Australia's publication rate is 4.4 times that of the US
+# However incidence is has an insignificant impact on no. articles published (p-value 0.060533 > 0.05).
+# This specifice analysis is conducted on too small a data set and so is not included in the final deliverable. 
+
+```
+
+
+
+```{r, echo = FALSE}
+#plotting incidences rates for AU and US
+Demand_Historical <- read.csv("~/Downloads/SCIF DATA(AU vs US incidence rate).csv")
+ggplot(Demand_Historical, aes(x = Year,
+                 y = Incidence.Rate,
+                 colour = Country,
+                 group = Country)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 2) +
+  labs(
+    title = "Cancer Incidence Rates: America vs Australia",
+    x = "Year",
+    y = "Incidence Rate (per 100,000)",
+    colour = "Country"
+  ) +
+ theme_classic() 
+```
+
+```{r}
+#standard linear model of incidence rates
+model <- lm(Incidence.Rate ~ Country + Year, data =  Demand_Historical)
+summary(model)
+```
+P-value for `CountryAustralia` shows significance, supporting that the difference in rates between AU and US is significant.
+
+```{r, fig.width=12, fig.height=4, out.width="100%", fig.align="center", echo = FALSE}
+library(ggplot2)
+library(dplyr)
+# Creating estimated timeline for sourcing mice
+
+# Creating timeline data
+activities <- data.frame(
+  activity = c(
+    "Availability", "Biosecurity", "Shipping",
+    "Quarantine", "Acclimatisation", "Rederivation"
+  ),
+  # Listing start and end times in weeks
+  start = c(1, 3, 10, 10.35, 10.35, 10.35),
+  end = c(10, 10, 10.35, 14.35, 11.35, 36),
+  level = c(3.5, 2.5, 1.5, 3.5, 2.5, 0.5),
+  category = c(
+    "Live Mice", "Both", "Both",
+    "Live Mice", "Live Mice", "Frozen Embryo"
+  ))
+
+# Plotting the timeline
+ggplot() +
+
+geom_rect(
+  data = activities,
+  aes(
+    xmin = start,
+    xmax = end,
+    ymin = level - 0.06,
+    ymax = level + 0.06,
+    fill = category
+  )
+) + scale_fill_manual(
+  name = "Type",
+  values = c(
+    "Live Mice" = "lightblue",
+    "Both" = "lavender",
+    "Frozen Embryo" = "pink"
+  )
+) +
+  # Labels
+  geom_text(
+    data = activities,
+    aes(
+      x = (start + end) / 2,
+      y = level + 0.5,
+      label = activity
+    ),
+    size = 4
+  ) +
+  # Relative time axis
+scale_x_continuous(
+  breaks = seq(2, 36, by = 2),
+  labels = seq(2, 36, by = 2),
+  limits = c(0.1, 36.5)
+) +
+  scale_y_continuous(
+    breaks = NULL,
+    limits = c(0.1, 6)
+  ) +
+  labs(
+    title = "Sourcing Mice Timeline Estimate",
+    x = "Week",
+    y = NULL
+  ) +
+
+  theme_classic() +
+  theme(
+    axis.line.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.text.y = element_blank(),
+    plot.title = element_text(
+      hjust = 0.5,
+      face = "bold"
+    ))
+```
+
+```{r}
+cost <- read.csv("~/Downloads/SCIF DATA(costs).csv")
+
+# Plotting cost estimates for sourcing mice
+
+# Creating totals data frame
+totals <- data.frame(
+  Type = c("Embryo", "Live"),
+  Total_Cost = c(7251.43, 6124.25)
+)
+
+# Creating stacked bar chart
+ggplot(cost, aes(x = Type, y = Cost, fill = Expense)) +
+
+  geom_col() +
+
+  # Adding total values above bars
+  geom_text(
+    data = totals,
+    aes(
+      x = Type,
+      y = Total_Cost,
+      label = paste0("$", format(
+        round(Total_Cost, 2),
+        big.mark = ",",
+        nsmall = 2
+      ))
+    ),
+    inherit.aes = FALSE,
+    vjust = -0.5,
+    size = 4
+  ) +
+
+  # Expense colours
+  scale_fill_manual(values = c(
+    "Initial Cost" = "lightblue",
+    "Biosecurity" = "lavender",
+    "Freight" = "lightpink"
+  )) +
+
+  # Chart labels
+  labs(
+    title = "Live Mouse vs Frozen Embryo Cost Comparison",
+    x = "",
+    y = "Cost ($)",
+    fill = "Expense"
+  ) +
+
+  theme_minimal() +
+
+  # Adding space above bars
+  scale_y_continuous(
+    expand = expansion(mult = c(0, 0.2))
+  )
+
+```
+
+```{r}
+# Plotting cost estimates with expenses seperate
+ggplot(cost, aes(x = Expense, y = Cost, fill = Type)) +
+  geom_col(position = position_dodge(width = 0.8),
+           width = 0.7) +
+scale_x_discrete(
+  limits = c("Initial Cost", "Biosecurity", "Freight")
+)+
+  labs(title = "Live Mouse vs Frozen Embryo Cost Comparison",
+    x = "Expense Category",
+    y = "Cost ($)",
+    fill = "Method"
+  ) +
+  scale_fill_manual(values = c(
+    "Embryo" = "lightblue",
+    "Live" = "lightpink"
+  )) +
+  theme_minimal() 
+```
+
+
+
+
